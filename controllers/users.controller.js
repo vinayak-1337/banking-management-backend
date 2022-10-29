@@ -20,7 +20,7 @@ exports.createUser = async (req, res) => {
         (err, results) => {
           if (err) {
             return trx.rollback(() => {
-              res.send(err);
+              if (err.code === "ER_DUP_ENTRY") res.status(400).send("duplicate entry");
             });
           }
           trx.query(
@@ -39,7 +39,7 @@ exports.createUser = async (req, res) => {
                   });
                 }
               });
-              res.send(results);
+              res.status(201).send(results);
             }
           );
         }
@@ -54,7 +54,7 @@ exports.loginUser = (req, res) => {
   connection.query(
     `SELECT * FROM users WHERE username='${username}'`,
     async (err, result) => {
-      if (!result.length) return res.send("user not found");
+      if (!result.length) return res.status(404).send("user not found");
       try {
         if (await bcrypt.compare(password, result[0].password)) {
           const { id, username, name } = result[0];
@@ -66,7 +66,7 @@ exports.loginUser = (req, res) => {
             responseResult.username = username;
           }
         } else {
-          return res.send("incorrect password");
+          return res.status(403).send("incorrect password");
         }
       } catch (error) {
         console.log(error);
@@ -93,8 +93,8 @@ exports.depositMoney = (req, res) => {
     "UPDATE user_balance SET balance=balance+? WHERE user_id=?",
     [amount, id],
     (err, result) => {
-      if (err) console.log(err);
-      res.send(result);
+      if (err) return res.sendStatus(500);
+      return res.sendStatus(200);
     }
   );
 };
@@ -105,7 +105,7 @@ exports.transferMoney = (req, res) => {
   connection.getConnection((err, trx) => {
     trx.beginTransaction((err) => {
       if (err) {
-        throw err;
+        return res.sendStatus(500);
       }
       trx.query(
         "SELECT id FROM users WHERE username=?",
@@ -113,7 +113,7 @@ exports.transferMoney = (req, res) => {
         (err, result) => {
           if (err) {
             return trx.rollback(() => {
-              res.send(err);
+              res.sendStatus(500);
             });
           }
           if (result.length == 0) {
@@ -125,7 +125,7 @@ exports.transferMoney = (req, res) => {
             (err, result) => {
               if (err) {
                 return trx.rollback(() => {
-                  res.send(err);
+                  res.sendStatus(500);
                 });
               }
               trx.query(
@@ -134,17 +134,17 @@ exports.transferMoney = (req, res) => {
                 (err, result) => {
                   if (err) {
                     return trx.rollback(() => {
-                      res.send(err);
+                      res.sendStatus(500);
                     });
                   }
                   trx.commit(() => {
                     if (err) {
                       return trx.rollback(() => {
-                        throw err;
+                        res.sendStatus(500);
                       });
                     }
                   });
-                  return res.send(result);
+                  return res.sendStatus(200);
                 }
               );
             }
