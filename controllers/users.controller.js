@@ -1,6 +1,7 @@
+require("dotenv").config();
 const connection = require("../config/database");
 const bcrypt = require("bcrypt");
-// const express = require('express');
+const jwt = require("jsonwebtoken");
 
 exports.createUser = async (req, res) => {
   const { name, age, contact, username, password } = req.body;
@@ -9,7 +10,7 @@ exports.createUser = async (req, res) => {
   connection.getConnection((err, trx) => {
     trx.beginTransaction((err) => {
       if (err) {
-        throw err;
+        return res.sendStatus(500);
       }
       let sql1 =
         "INSERT INTO users (name, age, contact, username, password) VALUES (?,?,?,?,?);";
@@ -20,7 +21,8 @@ exports.createUser = async (req, res) => {
         (err, results) => {
           if (err) {
             return trx.rollback(() => {
-              if (err.code === "ER_DUP_ENTRY") res.status(400).send("duplicate entry");
+              if (err.code === "ER_DUP_ENTRY")
+                res.status(400).send("duplicate entry");
             });
           }
           trx.query(
@@ -29,13 +31,13 @@ exports.createUser = async (req, res) => {
             (err, results) => {
               if (err) {
                 return trx.rollback(() => {
-                  throw err;
+                  return res.sendStatus(500);
                 });
               }
               trx.commit(() => {
                 if (err) {
                   return trx.rollback(() => {
-                    throw err;
+                    return res.sendStatus(500);
                   });
                 }
               });
@@ -54,17 +56,17 @@ exports.loginUser = (req, res) => {
   connection.query(
     `SELECT * FROM users WHERE username='${username}'`,
     async (err, result) => {
+      if (err) {
+        return res.sendStatus(500);
+      }
       if (!result.length) return res.status(404).send("user not found");
       try {
         if (await bcrypt.compare(password, result[0].password)) {
           const { id, username, name } = result[0];
-          if (err) {
-            console.log(err);
-          } else {
-            responseResult.id = id;
-            responseResult.name = name;
-            responseResult.username = username;
-          }
+
+          responseResult.id = id;
+          responseResult.name = name;
+          responseResult.username = username;
         } else {
           return res.status(403).send("incorrect password");
         }
@@ -76,10 +78,14 @@ exports.loginUser = (req, res) => {
         [result[0].id],
         (err, result) => {
           if (err) {
-            console.log(err);
+            return res.sendStatus(500);
           } else {
             responseResult.balance = result[0].balance;
-            res.send(responseResult);
+            const accessToken = jwt.sign(
+              responseResult,
+              process.env.ACCESS_TOKEN_SECRET
+            );
+            res.send({ accessToken, userData: responseResult });
           }
         }
       );
