@@ -160,3 +160,16 @@ exports.transferMoney = (req, res) => {
     });
   });
 };
+
+exports.getUser = (req, res) => {
+  const { id, name, username } = req.user;
+  connection.query(
+    "SELECT balance FROM user_balance WHERE user_id = ?",
+    id,
+    (err, result) => {
+      if(err) return res.sendStatus(500);
+      const balance = result[0].balance;
+      res.status(200).send({id, name, username, balance});
+    }
+  );
+};
